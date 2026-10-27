@@ -1,4 +1,5 @@
-﻿using StudentCourseManagement.Models;
+﻿
+using StudentCourseManagement.Models;
 using StudentCourseManagement.Repository;
 
 namespace StudentCourseManagement.Services;
@@ -7,35 +8,68 @@ public class CourseService
 {
     private readonly CourseRepository _repository;
 
-    public CourseService(CourseRepository repository)
+    public CourseService()
     {
-        _repository = repository;
+        _repository = new CourseRepository();
     }
 
-    public async Task AddCourseAsync(Course course)
+    public void AddCourse(Course course)
     {
         if (string.IsNullOrWhiteSpace(course.CourseName))
             throw new ArgumentException("Course name is required.");
 
         if (course.DurationMonths <= 0)
-            throw new ArgumentException("Duration must be greater than zero.");
+            throw new ArgumentException(
+                "Course duration must be greater than zero.");
 
         if (course.Fee < 0)
             throw new ArgumentException("Course fee cannot be negative.");
 
-        await _repository.AddCourseAsync(course);
+        if (course.DepartmentId <= 0)
+            throw new ArgumentException("Enter a valid department ID.");
+
+        _repository.Add(course);
     }
 
-    public Task<List<Course>> GetAllCoursesAsync()
+    public List<Course> GetAllCourses()
     {
-        return _repository.GetAllCoursesAsync();
+        return _repository.GetAll();
     }
 
-    public async Task<Course?> GetCourseByIdAsync(int id)
+    public Course? GetCourseById(int id)
     {
         if (id <= 0)
-            throw new ArgumentException("Course ID must be greater than zero.");
+            throw new ArgumentException("Invalid course ID.");
 
-        return await _repository.GetCourseByIdAsync(id);
+        return _repository.GetById(id);
+    }
+
+    public void UpdateCourse(Course course)
+    {
+        if (course.CourseId <= 0)
+            throw new ArgumentException("Invalid course ID.");
+
+        if (string.IsNullOrWhiteSpace(course.CourseName))
+            throw new ArgumentException("Course name is required.");
+
+        if (course.DurationMonths <= 0)
+            throw new ArgumentException(
+                "Course duration must be greater than zero.");
+
+        if (course.Fee < 0)
+            throw new ArgumentException("Course fee cannot be negative.");
+
+        if (course.DepartmentId <= 0)
+            throw new ArgumentException("Enter a valid department ID.");
+
+        _repository.Update(course);
+    }
+
+    public void DeleteCourse(int id)
+    {
+        if (id <= 0)
+            throw new ArgumentException("Invalid course ID.");
+
+        _repository.Delete(id);
     }
 }

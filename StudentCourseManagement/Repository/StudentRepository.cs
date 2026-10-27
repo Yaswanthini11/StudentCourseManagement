@@ -1,136 +1,131 @@
-﻿using Microsoft.Data.SqlClient;
+﻿
+using Microsoft.Data.SqlClient;
+using StudentCourseManagement.Helpers;
 using StudentCourseManagement.Models;
 
 namespace StudentCourseManagement.Repository;
 
 public class StudentRepository
 {
-    private readonly string _connectionString;
-
-    public StudentRepository(string connectionString)
+    public void Add(Student student)
     {
-        _connectionString = connectionString;
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
+
+        string query = @"INSERT INTO Students
+            (Name, Email, Age, DepartmentId, AdmissionDate, IsActive)
+            VALUES
+            (@Name, @Email, @Age, @DepartmentId, @AdmissionDate, @IsActive)";
+
+        using SqlCommand cmd = new SqlCommand(query, con);
+
+        cmd.Parameters.AddWithValue("@Name", student.Name);
+        cmd.Parameters.AddWithValue("@Email", student.Email);
+        cmd.Parameters.AddWithValue("@Age", student.Age);
+        cmd.Parameters.AddWithValue("@DepartmentId", student.DepartmentId);
+        cmd.Parameters.AddWithValue("@AdmissionDate", student.AdmissionDate);
+        cmd.Parameters.AddWithValue("@IsActive", student.IsActive);
+
+        cmd.ExecuteNonQuery();
     }
 
-    public async Task AddStudentAsync(Student student)
+    public List<Student> GetAll()
     {
-        const string query = """
-            INSERT INTO Students (Name, Email, Age)
-            VALUES (@Name, @Email, @Age)
-            """;
+        List<Student> students = new();
 
-        await using var connection = new SqlConnection(_connectionString);
-        await using var command = new SqlCommand(query, connection);
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
 
-        command.Parameters.AddWithValue("@Name", student.Name);
-        command.Parameters.AddWithValue("@Email", student.Email);
-        command.Parameters.AddWithValue("@Age", student.Age);
+        string query = "SELECT * FROM Students";
 
-        await connection.OpenAsync();
-        await command.ExecuteNonQueryAsync();
-    }
+        using SqlCommand cmd = new SqlCommand(query, con);
+        using SqlDataReader reader = cmd.ExecuteReader();
 
-    public async Task<List<Student>> GetAllStudentsAsync()
-    {
-        const string query = """
-            SELECT StudentId, Name, Email, Age
-            FROM Students
-            ORDER BY StudentId
-            """;
-
-        var students = new List<Student>();
-
-        await using var connection = new SqlConnection(_connectionString);
-        await using var command = new SqlCommand(query, connection);
-
-        await connection.OpenAsync();
-        await using var reader = await command.ExecuteReaderAsync();
-
-        while (await reader.ReadAsync())
+        while (reader.Read())
         {
-            students.Add(new Student
+            Student student = new Student
             {
-                StudentId = reader.GetInt32(0),
-                Name = reader.GetString(1),
-                Email = reader.GetString(2),
-                Age = reader.GetInt32(3)
-            });
+                StudentId = Convert.ToInt32(reader["StudentId"]),
+                Name = reader["Name"].ToString()!,
+                Email = reader["Email"].ToString()!,
+                Age = Convert.ToInt32(reader["Age"]),
+                DepartmentId = Convert.ToInt32(reader["DepartmentId"]),
+                AdmissionDate = Convert.ToDateTime(reader["AdmissionDate"]),
+                IsActive = Convert.ToBoolean(reader["IsActive"])
+            };
+
+            students.Add(student);
         }
 
         return students;
     }
 
-    public async Task<Student?> GetStudentByIdAsync(int id)
+    public Student? GetById(int id)
     {
-        const string query = """
-            SELECT StudentId, Name, Email, Age
-            FROM Students
-            WHERE StudentId = @StudentId
-            """;
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
 
-        await using var connection = new SqlConnection(_connectionString);
-        await using var command = new SqlCommand(query, connection);
-        command.Parameters.AddWithValue("@StudentId", id);
+        string query = "SELECT * FROM Students WHERE StudentId = @Id";
 
-        await connection.OpenAsync();
-        await using var reader = await command.ExecuteReaderAsync();
+        using SqlCommand cmd = new SqlCommand(query, con);
+        cmd.Parameters.AddWithValue("@Id", id);
 
-        if (await reader.ReadAsync())
+        using SqlDataReader reader = cmd.ExecuteReader();
+
+        if (reader.Read())
         {
             return new Student
             {
-                StudentId = reader.GetInt32(0),
-                Name = reader.GetString(1),
-                Email = reader.GetString(2),
-                Age = reader.GetInt32(3)
+                StudentId = Convert.ToInt32(reader["StudentId"]),
+                Name = reader["Name"].ToString()!,
+                Email = reader["Email"].ToString()!,
+                Age = Convert.ToInt32(reader["Age"]),
+                DepartmentId = Convert.ToInt32(reader["DepartmentId"]),
+                AdmissionDate = Convert.ToDateTime(reader["AdmissionDate"]),
+                IsActive = Convert.ToBoolean(reader["IsActive"])
             };
         }
 
         return null;
     }
-    public async Task EnrollStudentAsync(int studentId, int courseId)
+
+    public void Update(Student student)
     {
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
 
-        await using var transaction = await connection.BeginTransactionAsync();
+        string query = @"UPDATE Students SET
+            Name = @Name,
+            Email = @Email,
+            Age = @Age,
+            DepartmentId = @DepartmentId,
+            AdmissionDate = @AdmissionDate,
+            IsActive = @IsActive
+            WHERE StudentId = @Id";
 
-        try
-        {
-            const string enrollmentSql = """
-            INSERT INTO Enrollments (StudentId, CourseId)
-            VALUES (@StudentId, @CourseId)
-            """;
+        using SqlCommand cmd = new SqlCommand(query, con);
 
-            await using (var command = new SqlCommand(
-                enrollmentSql, connection, (SqlTransaction)transaction))
-            {
-                command.Parameters.AddWithValue("@StudentId", studentId);
-                command.Parameters.AddWithValue("@CourseId", courseId);
-                await command.ExecuteNonQueryAsync();
-            }
+        cmd.Parameters.AddWithValue("@Id", student.StudentId);
+        cmd.Parameters.AddWithValue("@Name", student.Name);
+        cmd.Parameters.AddWithValue("@Email", student.Email);
+        cmd.Parameters.AddWithValue("@Age", student.Age);
+        cmd.Parameters.AddWithValue("@DepartmentId", student.DepartmentId);
+        cmd.Parameters.AddWithValue("@AdmissionDate", student.AdmissionDate);
+        cmd.Parameters.AddWithValue("@IsActive", student.IsActive);
 
-            const string auditSql = """
-            INSERT INTO EnrollmentAudit (StudentId, CourseId, ActionName)
-            VALUES (@StudentId, @CourseId, @ActionName)
-            """;
-
-            await using (var command = new SqlCommand(
-                auditSql, connection, (SqlTransaction)transaction))
-            {
-                command.Parameters.AddWithValue("@StudentId", studentId);
-                command.Parameters.AddWithValue("@CourseId", courseId);
-                command.Parameters.AddWithValue("@ActionName", "ENROLLED");
-                await command.ExecuteNonQueryAsync();
-            }
-
-            await transaction.CommitAsync();
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+        cmd.ExecuteNonQuery();
     }
 
+    public void Delete(int id)
+    {
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
+
+        string query = "DELETE FROM Students WHERE StudentId = @Id";
+
+        using SqlCommand cmd = new SqlCommand(query, con);
+        cmd.Parameters.AddWithValue("@Id", id);
+
+        cmd.ExecuteNonQuery();
+    }
 }

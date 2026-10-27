@@ -1,91 +1,126 @@
-﻿using Microsoft.Data.SqlClient;
+﻿
+using Microsoft.Data.SqlClient;
+using StudentCourseManagement.Helpers;
 using StudentCourseManagement.Models;
 
 namespace StudentCourseManagement.Repository;
 
 public class CourseRepository
 {
-    private readonly string _connectionString;
-
-    public CourseRepository(string connectionString)
+    public void Add(Course course)
     {
-        _connectionString = connectionString;
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
+
+        string query = @"INSERT INTO Courses
+            (CourseName, DurationMonths, Fee, DepartmentId, IsActive)
+            VALUES
+            (@CourseName, @DurationMonths, @Fee, @DepartmentId, @IsActive)";
+
+        using SqlCommand cmd = new SqlCommand(query, con);
+
+        cmd.Parameters.AddWithValue("@CourseName", course.CourseName);
+        cmd.Parameters.AddWithValue("@DurationMonths", course.DurationMonths);
+        cmd.Parameters.AddWithValue("@Fee", course.Fee);
+        cmd.Parameters.AddWithValue("@DepartmentId", course.DepartmentId);
+        cmd.Parameters.AddWithValue("@IsActive", course.IsActive);
+
+        cmd.ExecuteNonQuery();
     }
 
-    public async Task AddCourseAsync(Course course)
+    public List<Course> GetAll()
     {
-        const string query = """
-            INSERT INTO Courses (CourseName, DurationMonths, Fee)
-            VALUES (@CourseName, @DurationMonths, @Fee)
-            """;
+        List<Course> courses = new();
 
-        await using var connection = new SqlConnection(_connectionString);
-        await using var command = new SqlCommand(query, connection);
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
 
-        command.Parameters.AddWithValue("@CourseName", course.CourseName);
-        command.Parameters.AddWithValue("@DurationMonths", course.DurationMonths);
-        command.Parameters.AddWithValue("@Fee", course.Fee);
+        string query = "SELECT * FROM Courses";
 
-        await connection.OpenAsync();
-        await command.ExecuteNonQueryAsync();
-    }
+        using SqlCommand cmd = new SqlCommand(query, con);
+        using SqlDataReader reader = cmd.ExecuteReader();
 
-    public async Task<List<Course>> GetAllCoursesAsync()
-    {
-        const string query = """
-            SELECT CourseId, CourseName, DurationMonths, Fee
-            FROM Courses
-            ORDER BY CourseId
-            """;
-
-        var courses = new List<Course>();
-
-        await using var connection = new SqlConnection(_connectionString);
-        await using var command = new SqlCommand(query, connection);
-
-        await connection.OpenAsync();
-        await using var reader = await command.ExecuteReaderAsync();
-
-        while (await reader.ReadAsync())
+        while (reader.Read())
         {
-            courses.Add(new Course
+            Course course = new Course
             {
-                CourseId = reader.GetInt32(0),
-                CourseName = reader.GetString(1),
-                DurationMonths = reader.GetInt32(2),
-                Fee = reader.GetDecimal(3)
-            });
+                CourseId = Convert.ToInt32(reader["CourseId"]),
+                CourseName = reader["CourseName"].ToString()!,
+                DurationMonths = Convert.ToInt32(reader["DurationMonths"]),
+                Fee = Convert.ToDecimal(reader["Fee"]),
+                DepartmentId = Convert.ToInt32(reader["DepartmentId"]),
+                IsActive = Convert.ToBoolean(reader["IsActive"])
+            };
+
+            courses.Add(course);
         }
 
         return courses;
     }
 
-    public async Task<Course?> GetCourseByIdAsync(int id)
+    public Course? GetById(int id)
     {
-        const string query = """
-            SELECT CourseId, CourseName, DurationMonths, Fee
-            FROM Courses
-            WHERE CourseId = @CourseId
-            """;
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
 
-        await using var connection = new SqlConnection(_connectionString);
-        await using var command = new SqlCommand(query, connection);
-        command.Parameters.AddWithValue("@CourseId", id);
+        string query = "SELECT * FROM Courses WHERE CourseId = @Id";
 
-        await connection.OpenAsync();
-        await using var reader = await command.ExecuteReaderAsync();
+        using SqlCommand cmd = new SqlCommand(query, con);
+        cmd.Parameters.AddWithValue("@Id", id);
 
-        if (await reader.ReadAsync())
+        using SqlDataReader reader = cmd.ExecuteReader();
+
+        if (reader.Read())
         {
             return new Course
             {
-                CourseId = reader.GetInt32(0),
-                CourseName = reader.GetString(1),
-                DurationMonths = reader.GetInt32(2),
-                Fee = reader.GetDecimal(3)
+                CourseId = Convert.ToInt32(reader["CourseId"]),
+                CourseName = reader["CourseName"].ToString()!,
+                DurationMonths = Convert.ToInt32(reader["DurationMonths"]),
+                Fee = Convert.ToDecimal(reader["Fee"]),
+                DepartmentId = Convert.ToInt32(reader["DepartmentId"]),
+                IsActive = Convert.ToBoolean(reader["IsActive"])
             };
         }
 
         return null;
+    }
+
+    public void Update(Course course)
+    {
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
+
+        string query = @"UPDATE Courses SET
+            CourseName = @CourseName,
+            DurationMonths = @DurationMonths,
+            Fee = @Fee,
+            DepartmentId = @DepartmentId,
+            IsActive = @IsActive
+            WHERE CourseId = @Id";
+
+        using SqlCommand cmd = new SqlCommand(query, con);
+
+        cmd.Parameters.AddWithValue("@Id", course.CourseId);
+        cmd.Parameters.AddWithValue("@CourseName", course.CourseName);
+        cmd.Parameters.AddWithValue("@DurationMonths", course.DurationMonths);
+        cmd.Parameters.AddWithValue("@Fee", course.Fee);
+        cmd.Parameters.AddWithValue("@DepartmentId", course.DepartmentId);
+        cmd.Parameters.AddWithValue("@IsActive", course.IsActive);
+
+        cmd.ExecuteNonQuery();
+    }
+
+    public void Delete(int id)
+    {
+        using SqlConnection con = DatabaseHelper.GetConnection();
+        con.Open();
+
+        string query = "DELETE FROM Courses WHERE CourseId = @Id";
+
+        using SqlCommand cmd = new SqlCommand(query, con);
+        cmd.Parameters.AddWithValue("@Id", id);
+
+        cmd.ExecuteNonQuery();
     }
 }

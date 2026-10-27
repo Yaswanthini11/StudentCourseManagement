@@ -1,4 +1,4 @@
-﻿unamespace StudentCourseManagement.Models;
+﻿namespace StudentCourseManagement.Models;
 
 public class Department
 {

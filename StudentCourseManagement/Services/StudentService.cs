@@ -1,4 +1,5 @@
-﻿using StudentCourseManagement.Models;
+﻿
+using StudentCourseManagement.Models;
 using StudentCourseManagement.Repository;
 
 namespace StudentCourseManagement.Services;
@@ -7,35 +8,68 @@ public class StudentService
 {
     private readonly StudentRepository _repository;
 
-    public StudentService(StudentRepository repository)
+    public StudentService()
     {
-        _repository = repository;
+        _repository = new StudentRepository();
     }
 
-    public async Task AddStudentAsync(Student student)
+    public void AddStudent(Student student)
     {
         if (string.IsNullOrWhiteSpace(student.Name))
             throw new ArgumentException("Student name is required.");
 
-        if (string.IsNullOrWhiteSpace(student.Email))
-            throw new ArgumentException("Student email is required.");
+        if (string.IsNullOrWhiteSpace(student.Email) ||
+            !student.Email.Contains('@'))
+            throw new ArgumentException("Enter a valid email.");
 
-        if (student.Age < 17 || student.Age > 60)
-            throw new ArgumentException("Age must be between 17 and 60.");
+        if (student.Age <= 0)
+            throw new ArgumentException("Age must be greater than zero.");
 
-        await _repository.AddStudentAsync(student);
+        if (student.DepartmentId <= 0)
+            throw new ArgumentException("Enter a valid department ID.");
+
+        _repository.Add(student);
     }
 
-    public Task<List<Student>> GetAllStudentsAsync()
+    public List<Student> GetAllStudents()
     {
-        return _repository.GetAllStudentsAsync();
+        return _repository.GetAll();
     }
 
-    public async Task<Student?> GetStudentByIdAsync(int id)
+    public Student? GetStudentById(int id)
     {
         if (id <= 0)
-            throw new ArgumentException("Student ID must be greater than zero.");
+            throw new ArgumentException("Invalid student ID.");
 
-        return await _repository.GetStudentByIdAsync(id);
+        return _repository.GetById(id);
+    }
+
+    public void UpdateStudent(Student student)
+    {
+        if (student.StudentId <= 0)
+            throw new ArgumentException("Invalid student ID.");
+
+        if (string.IsNullOrWhiteSpace(student.Name))
+            throw new ArgumentException("Student name is required.");
+
+        if (string.IsNullOrWhiteSpace(student.Email) ||
+            !student.Email.Contains('@'))
+            throw new ArgumentException("Enter a valid email.");
+
+        if (student.Age <= 0)
+            throw new ArgumentException("Age must be greater than zero.");
+
+        if (student.DepartmentId <= 0)
+            throw new ArgumentException("Enter a valid department ID.");
+
+        _repository.Update(student);
+    }
+
+    public void DeleteStudent(int id)
+    {
+        if (id <= 0)
+            throw new ArgumentException("Invalid student ID.");
+
+        _repository.Delete(id);
     }
 }

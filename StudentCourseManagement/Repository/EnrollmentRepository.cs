@@ -7,24 +7,81 @@ namespace StudentCourseManagement.Repository;
 
 public class EnrollmentRepository
 {
+    // Add enrollment and audit log in one transaction
     public void Add(Enrollment enrollment)
     {
         using SqlConnection con = DatabaseHelper.GetConnection();
         con.Open();
 
-        string query = @"INSERT INTO Enrollments
-            (StudentId, CourseId, EnrolledAt, Status)
-            VALUES
-            (@StudentId, @CourseId, @EnrolledAt, @Status)";
+        using SqlTransaction transaction = con.BeginTransaction();
 
-        using SqlCommand cmd = new SqlCommand(query, con);
+        try
+        {
+            // Step 1: Insert enrollment and get its generated ID
+            string enrollmentQuery = @"INSERT INTO Enrollments
+                (StudentId, CourseId, EnrolledAt, Status)
+                VALUES
+                (@StudentId, @CourseId, @EnrolledAt, @Status);
 
-        cmd.Parameters.AddWithValue("@StudentId", enrollment.StudentId);
-        cmd.Parameters.AddWithValue("@CourseId", enrollment.CourseId);
-        cmd.Parameters.AddWithValue("@EnrolledAt", enrollment.EnrolledAt);
-        cmd.Parameters.AddWithValue("@Status", enrollment.Status);
+                SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
-        cmd.ExecuteNonQuery();
+            int enrollmentId;
+
+            using (SqlCommand cmd = new SqlCommand(
+                enrollmentQuery, con, transaction))
+            {
+                cmd.Parameters.AddWithValue(
+                    "@StudentId", enrollment.StudentId);
+
+                cmd.Parameters.AddWithValue(
+                    "@CourseId", enrollment.CourseId);
+
+                cmd.Parameters.AddWithValue(
+                    "@EnrolledAt", enrollment.EnrolledAt);
+
+                cmd.Parameters.AddWithValue(
+                    "@Status", enrollment.Status);
+
+                enrollmentId = Convert.ToInt32(cmd.ExecuteScalar());
+            }
+
+            // Step 2: Insert the audit log
+            string auditQuery = @"INSERT INTO AuditLogs
+                (EntityName, EntityId, Action, Details)
+                VALUES
+                (@EntityName, @EntityId, @Action, @Details)";
+
+            using (SqlCommand cmd = new SqlCommand(
+                auditQuery, con, transaction))
+            {
+                cmd.Parameters.AddWithValue(
+                    "@EntityName", "Enrollment");
+
+                cmd.Parameters.AddWithValue(
+                    "@EntityId", enrollmentId);
+
+                cmd.Parameters.AddWithValue(
+                    "@Action", "INSERT");
+
+                cmd.Parameters.AddWithValue(
+                    "@Details",
+                    $"Student {enrollment.StudentId} enrolled in course {enrollment.CourseId}.");
+
+                cmd.ExecuteNonQuery();
+            }
+
+            // Step 3: Save both operations permanently
+            transaction.Commit();
+
+            // Keep the generated ID in the model
+            enrollment.EnrollmentId = enrollmentId;
+        }
+        catch
+        {
+            // If either operation fails, undo both operations
+            transaction.Rollback();
+            throw;
+        }
     }
 
     public List<Enrollment> GetAll()
